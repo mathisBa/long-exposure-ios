@@ -18,7 +18,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private var lastFrameBuffer: [UInt8]?
     private var accumulatorWidth = 0
     private var accumulatorHeight = 0
-    private let totalDuration: TimeInterval = 10.0
+    private let totalDuration: TimeInterval = 15.0
     private var countdownTimer: Timer?
     private var captureEndTime: Date?
     private let changeThreshold: Int = 150
@@ -123,6 +123,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             return
         }
         session.addInput(input)
+        configureFrameRate(device: device)
 
         videoOutput.videoSettings = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -445,6 +446,26 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             return .down
         default:
             return .right
+        }
+    }
+
+    private func configureFrameRate(device: AVCaptureDevice) {
+        let targetFrameRate: Double = 120
+        let formats = device.formats
+        let format60 = formats.first(where: { format in
+            format.videoSupportedFrameRateRanges.contains(where: { $0.maxFrameRate >= targetFrameRate })
+        })
+        let chosenFormat = format60 ?? device.activeFormat
+
+        do {
+            try device.lockForConfiguration()
+            device.activeFormat = chosenFormat
+            let frameDuration = CMTime(value: 1, timescale: Int32(targetFrameRate))
+            device.activeVideoMinFrameDuration = frameDuration
+            device.activeVideoMaxFrameDuration = frameDuration
+            device.unlockForConfiguration()
+        } catch {
+            showToast("Impossible d'augmenter le framerate.")
         }
     }
 }
