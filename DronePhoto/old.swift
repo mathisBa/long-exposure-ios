@@ -21,6 +21,8 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private let totalDuration: TimeInterval = 10.0
     private var countdownTimer: Timer?
     private var captureEndTime: Date?
+    private let changeThreshold: Int = 90
+    private let brightThreshold: UInt8 = 200
     private let logFormatter = ISO8601DateFormatter()
 
     // MARK: - Simple UI
@@ -290,7 +292,6 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             return
         }
 
-        let changeThreshold: Int = 60
         guard let referenceBuffer else { return }
 
         accumulatorBuffer!.withUnsafeMutableBufferPointer { accBuffer in
@@ -302,13 +303,15 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                     let b = row[srcOffset]
                     let g = row[srcOffset + 1]
                     let r = row[srcOffset + 2]
+                    let maxChannel = max(b, max(g, r))
                     let refIndex = accIndex
                     let refB = referenceBuffer[refIndex]
                     let refG = referenceBuffer[refIndex + 1]
                     let refR = referenceBuffer[refIndex + 2]
-                    if abs(Int(b) - Int(refB)) >= changeThreshold ||
+                    if maxChannel >= brightThreshold &&
+                        (abs(Int(b) - Int(refB)) >= changeThreshold ||
                         abs(Int(g) - Int(refG)) >= changeThreshold ||
-                        abs(Int(r) - Int(refR)) >= changeThreshold {
+                        abs(Int(r) - Int(refR)) >= changeThreshold) {
                         accBuffer[accIndex] = max(accBuffer[accIndex], b)
                         accBuffer[accIndex + 1] = max(accBuffer[accIndex + 1], g)
                         accBuffer[accIndex + 2] = max(accBuffer[accIndex + 2], r)
