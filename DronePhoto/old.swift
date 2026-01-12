@@ -21,9 +21,10 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private let totalDuration: TimeInterval = 10.0
     private var countdownTimer: Timer?
     private var captureEndTime: Date?
-    private let changeThreshold: Int = 90
-    private let brightThreshold: UInt8 = 200
+    private let changeThreshold: Int = 120
+    private let brightThreshold: UInt8 = 220
     private let logFormatter = ISO8601DateFormatter()
+    private var captureOrientation: UIDeviceOrientation = .portrait
 
     // MARK: - Simple UI
     private let previewView = UIView()
@@ -179,6 +180,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         resultImageView.image = nil
         resultImageView.isHidden = true
         previewLayer?.isHidden = false
+        captureOrientation = UIDevice.current.orientation
         captureEndTime = Date().addingTimeInterval(totalDuration)
 
         button.isEnabled = false
@@ -376,7 +378,8 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             intent: .defaultIntent
         ) else { return nil }
 
-        return UIImage(cgImage: cgImage)
+        let orientation = imageOrientation(for: captureOrientation)
+        return UIImage(cgImage: cgImage, scale: 1.0, orientation: orientation)
     }
 
     private func handleFinishedImages(result: UIImage?, reference: UIImage?, lastFrame: UIImage?) {
@@ -428,6 +431,21 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private func logEvent(_ message: String) {
         let timestamp = logFormatter.string(from: Date())
         print("[\(timestamp)] \(message)")
+    }
+
+    private func imageOrientation(for deviceOrientation: UIDeviceOrientation) -> UIImage.Orientation {
+        switch deviceOrientation {
+        case .portrait:
+            return .right
+        case .portraitUpsideDown:
+            return .left
+        case .landscapeLeft:
+            return .up
+        case .landscapeRight:
+            return .down
+        default:
+            return .right
+        }
     }
 }
  
