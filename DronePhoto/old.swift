@@ -21,8 +21,8 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private let totalDuration: TimeInterval = 10.0
     private var countdownTimer: Timer?
     private var captureEndTime: Date?
-    private let changeThreshold: Int = 120
-    private let brightThreshold: UInt8 = 220
+    private let changeThreshold: Int = 150
+    private let brightThreshold: UInt8 = 235
     private let logFormatter = ISO8601DateFormatter()
     private var captureOrientation: UIDeviceOrientation = .portrait
 
