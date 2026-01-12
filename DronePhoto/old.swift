@@ -14,6 +14,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private var isCapturing = false
     private var frameCount = 0
     private var accumulatorBuffer: [UInt8]?
+    private var referenceBuffer: [UInt8]?
     private var accumulatorWidth = 0
     private var accumulatorHeight = 0
     private let totalDuration: TimeInterval = 10.0
@@ -156,10 +157,11 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         queue.sync {
             if !isCapturing {
                 isCapturing = true
-                accumulatorBuffer = nil
-                accumulatorWidth = 0
-                accumulatorHeight = 0
-                frameCount = 0
+        accumulatorBuffer = nil
+        referenceBuffer = nil
+        accumulatorWidth = 0
+        accumulatorHeight = 0
+        frameCount = 0
                 shouldStart = true
             }
         }
@@ -196,17 +198,16 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
 
     private func finishCapture() {
         var bufferCopy: [UInt8]?
+        var referenceCopy: [UInt8]?
         var width = 0
         var height = 0
-        var frames = 0
-
         queue.sync {
             guard isCapturing else { return }
             isCapturing = false
             bufferCopy = accumulatorBuffer
+            referenceCopy = referenceBuffer
             width = accumulatorWidth
             height = accumulatorHeight
-            frames = frameCount
         }
 
         countdownTimer?.invalidate()
@@ -217,9 +218,10 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
 
         queue.async { [weak self] in
             guard let self else { return }
-            let image = self.buildImage(buffer: bufferCopy, width: width, height: height, frameCount: frames)
+            let image = self.buildImage(buffer: bufferCopy, width: width, height: height)
+            let referenceImage = self.buildImage(buffer: referenceCopy, width: width, height: height)
             DispatchQueue.main.async {
-                self.handleFinishedImage(image)
+                self.handleFinishedImages(result: image, reference: referenceImage)
             }
         }
     }
@@ -246,10 +248,33 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             accumulatorWidth = width
             accumulatorHeight = height
             accumulatorBuffer = [UInt8](repeating: 0, count: width * height * 4)
+            referenceBuffer = nil
         }
 
         guard accumulatorBuffer != nil else { return }
         let src = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        if referenceBuffer == nil {
+            var ref = [UInt8](repeating: 0, count: width * height * 4)
+            ref.withUnsafeMutableBufferPointer { refBuffer in
+                for y in 0..<height {
+                    let row = src.advanced(by: y * bytesPerRow)
+                    for x in 0..<width {
+                        let srcOffset = x * 4
+                        let refIndex = (y * width + x) * 4
+                        refBuffer[refIndex] = row[srcOffset]
+                        refBuffer[refIndex + 1] = row[srcOffset + 1]
+                        refBuffer[refIndex + 2] = row[srcOffset + 2]
+                        refBuffer[refIndex + 3] = row[srcOffset + 3]
+                    }
+                }
+            }
+            referenceBuffer = ref
+            return
+        }
+
+        let changeThreshold: Int = 60
+        guard let referenceBuffer else { return }
 
         accumulatorBuffer!.withUnsafeMutableBufferPointer { accBuffer in
             for y in 0..<height {
@@ -260,7 +285,13 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                     let b = row[srcOffset]
                     let g = row[srcOffset + 1]
                     let r = row[srcOffset + 2]
-                    if b >= whiteThreshold && g >= whiteThreshold && r >= whiteThreshold {
+                    let refIndex = accIndex
+                    let refB = referenceBuffer[refIndex]
+                    let refG = referenceBuffer[refIndex + 1]
+                    let refR = referenceBuffer[refIndex + 2]
+                    if abs(Int(b) - Int(refB)) >= changeThreshold ||
+                        abs(Int(g) - Int(refG)) >= changeThreshold ||
+                        abs(Int(r) - Int(refR)) >= changeThreshold {
                         accBuffer[accIndex] = max(accBuffer[accIndex], b)
                         accBuffer[accIndex + 1] = max(accBuffer[accIndex + 1], g)
                         accBuffer[accIndex + 2] = max(accBuffer[accIndex + 2], r)
@@ -273,7 +304,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     }
 
     // MARK: - Save result
-    private func buildImage(buffer: [UInt8]?, width: Int, height: Int, frameCount: Int) -> UIImage? {
+    private func buildImage(buffer: [UInt8]?, width: Int, height: Int) -> UIImage? {
         guard let accumulatorBuffer = buffer,
               width > 0,
               height > 0 else {
@@ -312,13 +343,13 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         return UIImage(cgImage: cgImage)
     }
 
-    private func handleFinishedImage(_ image: UIImage?) {
-        guard let image else {
+    private func handleFinishedImages(result: UIImage?, reference: UIImage?) {
+        guard let result else {
             showToast("Aucune image capturée")
             return
         }
 
-        resultImageView.image = image
+        resultImageView.image = result
         resultImageView.isHidden = false
         previewLayer?.isHidden = true
 
@@ -330,7 +361,10 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                 return
             }
             PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
+                PHAssetChangeRequest.creationRequestForAsset(from: result)
+                if let reference {
+                    PHAssetChangeRequest.creationRequestForAsset(from: reference)
+                }
             }) { success, error in
                 DispatchQueue.main.async {
                     if success {
