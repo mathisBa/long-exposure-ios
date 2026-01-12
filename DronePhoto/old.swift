@@ -15,11 +15,13 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private var frameCount = 0
     private var accumulatorBuffer: [UInt8]?
     private var referenceBuffer: [UInt8]?
+    private var lastFrameBuffer: [UInt8]?
     private var accumulatorWidth = 0
     private var accumulatorHeight = 0
     private let totalDuration: TimeInterval = 10.0
     private var countdownTimer: Timer?
-    private let whiteThreshold: UInt8 = 220
+    private var captureEndTime: Date?
+    private let logFormatter = ISO8601DateFormatter()
 
     // MARK: - Simple UI
     private let previewView = UIView()
@@ -157,15 +159,17 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         queue.sync {
             if !isCapturing {
                 isCapturing = true
-        accumulatorBuffer = nil
-        referenceBuffer = nil
-        accumulatorWidth = 0
-        accumulatorHeight = 0
-        frameCount = 0
+                accumulatorBuffer = nil
+                referenceBuffer = nil
+                lastFrameBuffer = nil
+                accumulatorWidth = 0
+                accumulatorHeight = 0
+                frameCount = 0
                 shouldStart = true
             }
         }
         guard shouldStart else { return }
+        logEvent("LongExposure: start capture")
         startCapture()
     }
 
@@ -173,6 +177,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         resultImageView.image = nil
         resultImageView.isHidden = true
         previewLayer?.isHidden = false
+        captureEndTime = Date().addingTimeInterval(totalDuration)
 
         button.isEnabled = false
         button.alpha = 0.5
@@ -192,6 +197,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         countdownTimer = timer
 
         DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) { [weak self] in
+            self?.logEvent("LongExposure: end capture timer")
             self?.finishCapture()
         }
     }
@@ -199,13 +205,17 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     private func finishCapture() {
         var bufferCopy: [UInt8]?
         var referenceCopy: [UInt8]?
+        var lastFrameCopy: [UInt8]?
         var width = 0
         var height = 0
+        captureEndTime = nil
         queue.sync {
             guard isCapturing else { return }
+            self.logEvent("Fini fini")
             isCapturing = false
             bufferCopy = accumulatorBuffer
             referenceCopy = referenceBuffer
+            lastFrameCopy = lastFrameBuffer
             width = accumulatorWidth
             height = accumulatorHeight
         }
@@ -220,8 +230,10 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             guard let self else { return }
             let image = self.buildImage(buffer: bufferCopy, width: width, height: height)
             let referenceImage = self.buildImage(buffer: referenceCopy, width: width, height: height)
+            let lastFrameImage = self.buildImage(buffer: lastFrameCopy, width: width, height: height)
+            self.logEvent("LongExposure: images built")
             DispatchQueue.main.async {
-                self.handleFinishedImages(result: image, reference: referenceImage)
+                self.handleFinishedImages(result: image, reference: referenceImage, lastFrame: lastFrameImage)
             }
         }
     }
@@ -231,6 +243,9 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                        from connection: AVCaptureConnection) {
         guard isCapturing,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return
+        }
+        if let endTime = captureEndTime, Date() >= endTime {
             return
         }
 
@@ -249,6 +264,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             accumulatorHeight = height
             accumulatorBuffer = [UInt8](repeating: 0, count: width * height * 4)
             referenceBuffer = nil
+            lastFrameBuffer = nil
         }
 
         guard accumulatorBuffer != nil else { return }
@@ -270,6 +286,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                 }
             }
             referenceBuffer = ref
+            lastFrameBuffer = ref
             return
         }
 
@@ -299,6 +316,22 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                 }
             }
         }
+
+        var last = [UInt8](repeating: 0, count: width * height * 4)
+        last.withUnsafeMutableBufferPointer { lastBuffer in
+            for y in 0..<height {
+                let row = src.advanced(by: y * bytesPerRow)
+                for x in 0..<width {
+                    let srcOffset = x * 4
+                    let idx = (y * width + x) * 4
+                    lastBuffer[idx] = row[srcOffset]
+                    lastBuffer[idx + 1] = row[srcOffset + 1]
+                    lastBuffer[idx + 2] = row[srcOffset + 2]
+                    lastBuffer[idx + 3] = row[srcOffset + 3]
+                }
+            }
+        }
+        lastFrameBuffer = last
 
         frameCount += 1
     }
@@ -343,7 +376,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         return UIImage(cgImage: cgImage)
     }
 
-    private func handleFinishedImages(result: UIImage?, reference: UIImage?) {
+    private func handleFinishedImages(result: UIImage?, reference: UIImage?, lastFrame: UIImage?) {
         guard let result else {
             showToast("Aucune image capturée")
             return
@@ -365,6 +398,9 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                 if let reference {
                     PHAssetChangeRequest.creationRequestForAsset(from: reference)
                 }
+                if let lastFrame {
+                    PHAssetChangeRequest.creationRequestForAsset(from: lastFrame)
+                }
             }) { success, error in
                 DispatchQueue.main.async {
                     if success {
@@ -384,6 +420,11 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             alert.dismiss(animated: true)
         }
+    }
+
+    private func logEvent(_ message: String) {
+        let timestamp = logFormatter.string(from: Date())
+        print("[\(timestamp)] \(message)")
     }
 }
  
