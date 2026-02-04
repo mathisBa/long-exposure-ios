@@ -47,18 +47,21 @@ enum DrawMode {
     case shape
     case letter
     case digit
+    case custom
 }
 
 enum DrawingChoice {
     case shape(ShapeChoice)
     case letter(LetterChoice)
     case digit(DigitChoice)
+    case custom(CustomPath)
 
     var displayName: String {
         switch self {
         case .shape(let shape): return shape.rawValue
         case .letter(let letter): return "Lettre \(letter.rawValue)"
         case .digit(let digit): return "Chiffre \(digit.rawValue)"
+        case .custom: return "Chemin perso"
         }
     }
 
@@ -66,6 +69,7 @@ enum DrawingChoice {
         switch self {
         case .shape(let shape): return shape.systemImage
         case .letter, .digit: return nil
+        case .custom: return "point.topleft.down.curvedto.point.bottomright.up"
         }
     }
 }
@@ -76,6 +80,7 @@ enum FlowStep {
     case shape
     case letter
     case digit
+    case custom
     case photo
     case preview
 }
@@ -86,6 +91,7 @@ struct ContentView: View {
     @State private var selectedShape: ShapeChoice?
     @State private var selectedLetter: LetterChoice?
     @State private var selectedDigit: DigitChoice?
+    @State private var customPath = CustomPath(points: [])
     @State private var selectedColor: Color = .blue
     @State private var previewImage: UIImage?
 
@@ -117,6 +123,8 @@ struct ContentView: View {
                         step = .letter
                     case .digit:
                         step = .digit
+                    case .custom:
+                        step = .custom
                     }
                 }
                 .transition(.opacity)
@@ -141,6 +149,13 @@ struct ContentView: View {
                     step = .mode
                 }
                 .transition(.opacity)
+            case .custom:
+                CustomPathStepView(path: $customPath) {
+                    step = .photo
+                } onBack: {
+                    step = .mode
+                }
+                .transition(.opacity)
             case .photo:
                 PhotoStepView(
                     drawingChoice: currentDrawingChoice,
@@ -153,6 +168,8 @@ struct ContentView: View {
                             step = .letter
                         case .digit:
                             step = .digit
+                        case .custom:
+                            step = .custom
                         case .none:
                             step = .mode
                         }
@@ -179,6 +196,7 @@ struct ContentView: View {
         selectedShape = nil
         selectedLetter = nil
         selectedDigit = nil
+        customPath = CustomPath(points: [])
         selectedColor = .blue
         step = .color
     }
@@ -196,6 +214,10 @@ struct ContentView: View {
         case .digit:
             if let selectedDigit {
                 return .digit(selectedDigit)
+            }
+        case .custom:
+            if customPath.points.count >= 2 {
+                return .custom(customPath)
             }
         case .none:
             break
@@ -269,6 +291,29 @@ struct ModeStepView: View {
                     Image(systemName: "number")
                         .font(.title2)
                     Text("Chiffre")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                selectedMode = .custom
+                onNext(.custom)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
+                        .font(.title2)
+                    Text("Chemin")
                         .font(.title3.weight(.semibold))
                     Spacer()
                 }
@@ -486,6 +531,131 @@ struct DigitStepView: View {
                 .foregroundStyle(selected == nil ? Color.white.opacity(0.6) : Color.black)
                 .clipShape(Capsule())
                 .disabled(selected == nil)
+            }
+        }
+        .padding(24)
+    }
+}
+
+struct CustomPathPoint: Hashable {
+    let row: Int
+    let col: Int
+}
+
+struct CustomPath: Equatable {
+    var points: [CustomPathPoint]
+}
+
+struct CustomPathStepView: View {
+    @Binding var path: CustomPath
+    var onNext: () -> Void
+    var onBack: () -> Void
+
+    private let rows = 4
+    private let cols = 3
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("Trace ton chemin")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.white)
+
+            GeometryReader { proxy in
+                let size = proxy.size
+                let padding: CGFloat = 16
+                let gridWidth = size.width - padding * 2
+                let gridHeight = size.height - padding * 2
+                let cellWidth = gridWidth / CGFloat(cols - 1)
+                let cellHeight = gridHeight / CGFloat(rows - 1)
+
+                ZStack {
+                    Path { path in
+                        for row in 0..<rows {
+                            for col in 0..<cols {
+                                let x = padding + CGFloat(col) * cellWidth
+                                let y = padding + CGFloat(row) * cellHeight
+                                path.addEllipse(in: CGRect(x: x - 7, y: y - 7, width: 14, height: 14))
+                            }
+                        }
+                    }
+                    .fill(Color.white.opacity(0.9))
+
+                    if path.points.count >= 2 {
+                        Path { line in
+                            for (index, point) in path.points.enumerated() {
+                                let x = padding + CGFloat(point.col) * cellWidth
+                                let y = padding + CGFloat(point.row) * cellHeight
+                                if index == 0 {
+                                    line.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    line.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+                        .shadow(color: Color.black.opacity(0.25), radius: 4, x: 0, y: 2)
+                    }
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let x = min(max(value.location.x - padding, 0), gridWidth)
+                            let y = min(max(value.location.y - padding, 0), gridHeight)
+                            let col = Int(round(x / cellWidth))
+                            let row = Int(round(y / cellHeight))
+                            guard row >= 0, row < rows, col >= 0, col < cols else { return }
+                            let point = CustomPathPoint(row: row, col: col)
+                            if path.points.last != point {
+                                guard let last = path.points.last else {
+                                    path.points.append(point)
+                                    return
+                                }
+                                let dRow = abs(point.row - last.row)
+                                let dCol = abs(point.col - last.col)
+                                guard (dRow + dCol) == 1 else { return }
+                                path.points.append(point)
+                            }
+                        }
+                )
+            }
+            .frame(height: 320)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.08))
+            )
+
+            HStack(spacing: 12) {
+                Button("Retour") {
+                    onBack()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+
+                Button("Effacer") {
+                    path.points = []
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+
+                Button("Suivant") {
+                    onNext()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(path.points.count < 2 ? Color.gray.opacity(0.4) : Color.white)
+                .foregroundStyle(path.points.count < 2 ? Color.white.opacity(0.6) : Color.black)
+                .clipShape(Capsule())
+                .disabled(path.points.count < 2)
             }
         }
         .padding(24)
@@ -795,6 +965,9 @@ struct PhotoStepView: View {
     private var primaryButtonEnabled: Bool {
         if isDroneRunning {
             return canStartPictureWhileDroneRunning && !isCapturing
+        }
+        if case .custom(let path) = drawingChoice {
+            return path.points.count >= 2 && !isCapturing
         }
         return drawingChoice != nil && !isCapturing
     }

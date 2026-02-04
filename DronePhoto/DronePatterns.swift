@@ -14,6 +14,8 @@ enum DronePatternLibrary {
             return letterCommands(for: letter, spacing: spacing)
         case .digit(let digit):
             return digitCommands(for: digit, spacing: spacing)
+        case .custom(let path):
+            return customCommands(for: path, spacing: spacing)
         }
     }
 
@@ -316,5 +318,42 @@ enum DronePatternLibrary {
                 DroneCommand(text: "right 50", waitAfter: spacing)
             ]
         }
+    }
+
+    private static func customCommands(for path: CustomPath, spacing: TimeInterval) -> [DroneCommand] {
+        guard path.points.count >= 2 else { return [] }
+        var commands: [DroneCommand] = []
+
+        let startRow = path.points[0].row
+        let rowsFromBottom = max(0, 3 - startRow)
+        let initialRise = rowsFromBottom * 25 + 25
+        if initialRise > 0 {
+            commands.append(DroneCommand(text: "up \(initialRise)", waitAfter: spacing))
+        }
+
+        for index in 1..<path.points.count {
+            let prev = path.points[index - 1]
+            let next = path.points[index]
+            let dRow = next.row - prev.row
+            let dCol = next.col - prev.col
+
+            if dRow != 0 {
+                let steps = abs(dRow)
+                let command = dRow > 0 ? "down 25" : "up 25"
+                for _ in 0..<steps {
+                    commands.append(DroneCommand(text: command, waitAfter: spacing))
+                }
+            }
+
+            if dCol != 0 {
+                let steps = abs(dCol)
+                let command = dCol > 0 ? "right 25" : "left 25"
+                for _ in 0..<steps {
+                    commands.append(DroneCommand(text: command, waitAfter: spacing))
+                }
+            }
+        }
+
+        return commands
     }
 }
