@@ -28,26 +28,44 @@ enum LetterChoice: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum DigitChoice: String, CaseIterable, Identifiable {
+    case zero = "0"
+    case one = "1"
+    case two = "2"
+    case three = "3"
+    case four = "4"
+    case five = "5"
+    case six = "6"
+    case seven = "7"
+    case eight = "8"
+    case nine = "9"
+
+    var id: String { rawValue }
+}
+
 enum DrawMode {
     case shape
     case letter
+    case digit
 }
 
 enum DrawingChoice {
     case shape(ShapeChoice)
     case letter(LetterChoice)
+    case digit(DigitChoice)
 
     var displayName: String {
         switch self {
         case .shape(let shape): return shape.rawValue
         case .letter(let letter): return "Lettre \(letter.rawValue)"
+        case .digit(let digit): return "Chiffre \(digit.rawValue)"
         }
     }
 
     var systemImage: String? {
         switch self {
         case .shape(let shape): return shape.systemImage
-        case .letter: return nil
+        case .letter, .digit: return nil
         }
     }
 }
@@ -57,6 +75,7 @@ enum FlowStep {
     case mode
     case shape
     case letter
+    case digit
     case photo
     case preview
 }
@@ -66,6 +85,7 @@ struct ContentView: View {
     @State private var selectedMode: DrawMode?
     @State private var selectedShape: ShapeChoice?
     @State private var selectedLetter: LetterChoice?
+    @State private var selectedDigit: DigitChoice?
     @State private var selectedColor: Color = .blue
     @State private var previewImage: UIImage?
 
@@ -95,6 +115,8 @@ struct ContentView: View {
                         step = .shape
                     case .letter:
                         step = .letter
+                    case .digit:
+                        step = .digit
                     }
                 }
                 .transition(.opacity)
@@ -112,6 +134,13 @@ struct ContentView: View {
                     step = .mode
                 }
                 .transition(.opacity)
+            case .digit:
+                DigitStepView(selected: $selectedDigit) {
+                    step = .photo
+                } onBack: {
+                    step = .mode
+                }
+                .transition(.opacity)
             case .photo:
                 PhotoStepView(
                     drawingChoice: currentDrawingChoice,
@@ -122,6 +151,8 @@ struct ContentView: View {
                             step = .shape
                         case .letter:
                             step = .letter
+                        case .digit:
+                            step = .digit
                         case .none:
                             step = .mode
                         }
@@ -147,6 +178,7 @@ struct ContentView: View {
         selectedMode = nil
         selectedShape = nil
         selectedLetter = nil
+        selectedDigit = nil
         selectedColor = .blue
         step = .color
     }
@@ -160,6 +192,10 @@ struct ContentView: View {
         case .letter:
             if let selectedLetter {
                 return .letter(selectedLetter)
+            }
+        case .digit:
+            if let selectedDigit {
+                return .digit(selectedDigit)
             }
         case .none:
             break
@@ -210,6 +246,29 @@ struct ModeStepView: View {
                     Image(systemName: "textformat")
                         .font(.title2)
                     Text("Lettre")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                selectedMode = .digit
+                onNext(.digit)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "number")
+                        .font(.title2)
+                    Text("Chiffre")
                         .font(.title3.weight(.semibold))
                     Spacer()
                 }
@@ -369,6 +428,69 @@ struct LetterStepView: View {
     }
 }
 
+struct DigitStepView: View {
+    @Binding var selected: DigitChoice?
+    var onNext: () -> Void
+    var onBack: () -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 54), spacing: 12)
+    ]
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Choisis un chiffre")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.white)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(DigitChoice.allCases) { digit in
+                    Button {
+                        selected = digit
+                    } label: {
+                        Text(digit.rawValue)
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 54, height: 54)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selected == digit ? Color.green : Color.white.opacity(0.2), lineWidth: 2)
+                                    )
+                            )
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button("Retour") {
+                    onBack()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+
+                Button("Suivant") {
+                    onNext()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(selected == nil ? Color.gray.opacity(0.4) : Color.white)
+                .foregroundStyle(selected == nil ? Color.white.opacity(0.6) : Color.black)
+                .clipShape(Capsule())
+                .disabled(selected == nil)
+            }
+        }
+        .padding(24)
+    }
+}
 struct ColorStepView: View {
     @Binding var selectedColor: Color
     var onNext: () -> Void

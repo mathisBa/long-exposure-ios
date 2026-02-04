@@ -12,6 +12,8 @@ enum DronePatternLibrary {
             return shapeCommands(for: shape, spacing: spacing)
         case .letter(let letter):
             return letterCommands(for: letter, spacing: spacing)
+        case .digit(let digit):
+            return digitCommands(for: digit, spacing: spacing)
         }
     }
 
@@ -231,6 +233,87 @@ enum DronePatternLibrary {
                 DroneCommand(text: "left 50", waitAfter: spacing),
                 DroneCommand(text: "go 50 100 0 25", waitAfter: spacing),
                 DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        }
+    }
+
+    private static func digitCommands(for digit: DigitChoice, spacing: TimeInterval) -> [DroneCommand] {
+        switch digit {
+        case .zero:
+            return [
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "down 100", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        case .one:
+            return [
+                DroneCommand(text: "up 100", waitAfter: spacing)
+            ]
+        case .two:
+            return [
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        case .three:
+            return [
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "left 25", waitAfter: spacing),
+                DroneCommand(text: "right 25", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        case .four:
+            return [
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+            ]
+        case .five:
+            return [
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "up 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing)
+            ]
+        case .six:
+            return [
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing)
+            ]
+        case .seven:
+            return [
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        case .eight:
+            return [
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing)
+            ]
+        case .nine:
+            return [
+                DroneCommand(text: "right 50", waitAfter: spacing),
+                DroneCommand(text: "up 100", waitAfter: spacing),
+                DroneCommand(text: "left 50", waitAfter: spacing),
+                DroneCommand(text: "down 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing)
             ]
         }
     }
