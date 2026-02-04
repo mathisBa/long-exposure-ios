@@ -4,6 +4,8 @@ import Photos
 
 final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
     var onFinishedCapture: ((UIImage) -> Void)?
+    var selectedShape: ShapeChoice?
+    var lastCaptureRequestID: UUID?
 
     // MARK: - Camera
     private let session = AVCaptureSession()
@@ -176,6 +178,10 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         guard shouldStart else { return }
         logEvent("LongExposure: start capture")
         startCapture()
+    }
+
+    func startCaptureExternally() {
+        startCaptureTapped()
     }
 
     private func startCapture() {

@@ -236,46 +236,144 @@ struct PhotoStepView: View {
     var onBack: () -> Void
     var onCaptured: (UIImage) -> Void
     @State private var dragOffset: CGFloat = 0
+    @State private var isDroneSequenceDone = false
+    @State private var isDroneRunning = false
+    @State private var captureRequestID: UUID?
+    @State private var isCapturing = false
+    @State private var pulse = false
+    @State private var canStartPictureWhileDroneRunning = false
+    @State private var showFlightToast = false
+    @State private var toastWorkItem: DispatchWorkItem?
 
     var body: some View {
         ZStack(alignment: .top) {
-            LongExposureCameraView(onFinished: onCaptured)
+            LongExposureCameraView(
+                shape: shape,
+                captureRequestID: captureRequestID,
+                onFinished: onCaptured
+            )
                 .ignoresSafeArea()
 
-            HStack {
-                Button("Retour") {
-                    onBack()
-                }
-                .font(.headline)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.35))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
-
-                Spacer()
-
-                HStack(spacing: 8) {
-                    if let shape {
-                        Image(systemName: shape.systemImage)
-                        Text(shape.rawValue)
-                    } else {
-                        Text("Aucune forme")
+            VStack(spacing: 12) {
+                HStack {
+                    if !isDroneRunning {
+                        Button("Retour") {
+                            onBack()
+                        }
+                        .font(.headline)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.35))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
                     }
-                    Circle()
-                        .fill(color)
-                        .frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+
+                    Spacer()
+
+                    HStack(spacing: 8) {
+                        if let shape {
+                            Image(systemName: shape.systemImage)
+                            Text(shape.rawValue)
+                        } else {
+                            Text("Aucune forme")
+                        }
+                        Circle()
+                            .fill(color)
+                            .frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.35))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
                 }
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.35))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
+
+                if isDroneRunning {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                        Text("Drone en cours...")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.45))
+                    .clipShape(Capsule())
+                    .scaleEffect(pulse ? 1.04 : 1.0)
+                    .opacity(pulse ? 1.0 : 0.85)
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                            pulse = true
+                        }
+                    }
+                    .onDisappear {
+                        pulse = false
+                    }
+                }
             }
             .padding(.top, 12)
             .padding(.horizontal, 16)
+        }
+        .overlay(alignment: .top) {
+            if showFlightToast {
+                Text("Vol en cours")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.6))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .transition(.opacity)
+                    .padding(.top, 64)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button(primaryButtonTitle) {
+                if isDroneRunning {
+                    guard canStartPictureWhileDroneRunning else { return }
+                    guard !isCapturing else { return }
+                    isCapturing = true
+                    captureRequestID = UUID()
+                    return
+                }
+                guard !isDroneSequenceDone else {
+                    guard !isCapturing else { return }
+                    isCapturing = true
+                    captureRequestID = UUID()
+                    isDroneSequenceDone = false
+                    return
+                }
+                isDroneRunning = true
+                canStartPictureWhileDroneRunning = false
+                DroneSequenceManager.shared.startSequence(shape: shape) {
+                    isDroneRunning = false
+                    isDroneSequenceDone = true
+                    canStartPictureWhileDroneRunning = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if isDroneRunning {
+                        canStartPictureWhileDroneRunning = true
+                    }
+                }
+            }
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.blue.opacity(primaryButtonEnabled ? 1.0 : 0.6))
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .disabled(!primaryButtonEnabled)
+        }
+        .onChange(of: captureRequestID) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isCapturing = false
+            }
         }
         .contentShape(Rectangle())
         .highPriorityGesture(
@@ -284,6 +382,10 @@ struct PhotoStepView: View {
                     dragOffset = value.translation.width
                 }
                 .onEnded { value in
+                    guard !isDroneRunning else {
+                        showFlightToastMessage()
+                        return
+                    }
                     let shouldGoBack = value.translation.width > 90 && abs(value.translation.height) < 60
                     dragOffset = 0
                     if shouldGoBack {
@@ -291,6 +393,41 @@ struct PhotoStepView: View {
                     }
                 }
         )
+    }
+
+    private var buttonTitle: String {
+        if isDroneRunning {
+            return "Start picture"
+        }
+        return isDroneSequenceDone ? "Start picture" : "Start drone"
+    }
+
+    private var primaryButtonTitle: String {
+        if isDroneRunning {
+            return "Commencer la captation"
+        }
+        return isDroneSequenceDone ? "Commencer la captation" : "Démarrer le drone"
+    }
+
+    private var primaryButtonEnabled: Bool {
+        if isDroneRunning {
+            return canStartPictureWhileDroneRunning && !isCapturing
+        }
+        return !isCapturing
+    }
+
+    private func showFlightToastMessage() {
+        toastWorkItem?.cancel()
+        withAnimation(.easeIn(duration: 0.15)) {
+            showFlightToast = true
+        }
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showFlightToast = false
+            }
+        }
+        toastWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 }
 
@@ -327,14 +464,22 @@ struct PreviewStepView: View {
 }
 
 struct LongExposureCameraView: UIViewControllerRepresentable {
+    var shape: ShapeChoice?
+    var captureRequestID: UUID?
     var onFinished: (UIImage) -> Void = { _ in }
 
     func makeUIViewController(context: Context) -> LongExposureViewController {
         let controller = LongExposureViewController()
         controller.onFinishedCapture = onFinished
+        controller.selectedShape = shape
         return controller
     }
 
     func updateUIViewController(_ uiViewController: LongExposureViewController, context: Context) {
+        uiViewController.selectedShape = shape
+        if let captureRequestID, captureRequestID != uiViewController.lastCaptureRequestID {
+            uiViewController.lastCaptureRequestID = captureRequestID
+            uiViewController.startCaptureExternally()
+        }
     }
 }
