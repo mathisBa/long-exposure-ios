@@ -22,16 +22,50 @@ enum ShapeChoice: String, CaseIterable, Identifiable {
     }
 }
 
-enum FlowStep {
+enum LetterChoice: String, CaseIterable, Identifiable {
+    case A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+
+    var id: String { rawValue }
+}
+
+enum DrawMode {
     case shape
+    case letter
+}
+
+enum DrawingChoice {
+    case shape(ShapeChoice)
+    case letter(LetterChoice)
+
+    var displayName: String {
+        switch self {
+        case .shape(let shape): return shape.rawValue
+        case .letter(let letter): return "Lettre \(letter.rawValue)"
+        }
+    }
+
+    var systemImage: String? {
+        switch self {
+        case .shape(let shape): return shape.systemImage
+        case .letter: return nil
+        }
+    }
+}
+
+enum FlowStep {
+    case mode
+    case shape
+    case letter
     case color
     case photo
     case preview
 }
 
 struct ContentView: View {
-    @State private var step: FlowStep = .shape
+    @State private var step: FlowStep = .mode
+    @State private var selectedMode: DrawMode?
     @State private var selectedShape: ShapeChoice?
+    @State private var selectedLetter: LetterChoice?
     @State private var selectedColor: Color = .blue
     @State private var previewImage: UIImage?
 
@@ -45,21 +79,47 @@ struct ContentView: View {
             .ignoresSafeArea()
 
             switch step {
+            case .mode:
+                ModeStepView(selectedMode: $selectedMode) { mode in
+                    switch mode {
+                    case .shape:
+                        step = .shape
+                    case .letter:
+                        step = .letter
+                    }
+                }
+                .transition(.opacity)
             case .shape:
                 ShapeStepView(selected: $selectedShape) {
                     step = .color
+                } onBack: {
+                    step = .mode
+                }
+                .transition(.opacity)
+            case .letter:
+                LetterStepView(selected: $selectedLetter) {
+                    step = .color
+                } onBack: {
+                    step = .mode
                 }
                 .transition(.opacity)
             case .color:
                 ColorStepView(selectedColor: $selectedColor) {
                     step = .photo
                 } onBack: {
-                    step = .shape
+                    switch selectedMode {
+                    case .shape:
+                        step = .shape
+                    case .letter:
+                        step = .letter
+                    case .none:
+                        step = .mode
+                    }
                 }
                 .transition(.opacity)
             case .photo:
                 PhotoStepView(
-                    shape: selectedShape,
+                    drawingChoice: currentDrawingChoice,
                     color: selectedColor,
                     onBack: { step = .color },
                     onCaptured: { image in
@@ -80,15 +140,94 @@ struct ContentView: View {
     }
 
     private func resetFlow() {
+        selectedMode = nil
         selectedShape = nil
+        selectedLetter = nil
         selectedColor = .blue
-        step = .shape
+        step = .mode
+    }
+
+    private var currentDrawingChoice: DrawingChoice? {
+        switch selectedMode {
+        case .shape:
+            if let selectedShape {
+                return .shape(selectedShape)
+            }
+        case .letter:
+            if let selectedLetter {
+                return .letter(selectedLetter)
+            }
+        case .none:
+            break
+        }
+        return nil
+    }
+}
+
+struct ModeStepView: View {
+    @Binding var selectedMode: DrawMode?
+    var onNext: (DrawMode) -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Choisis un type")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.white)
+
+            Button {
+                selectedMode = .shape
+                onNext(.shape)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "square.on.circle")
+                        .font(.title2)
+                    Text("Forme")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                selectedMode = .letter
+                onNext(.letter)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "textformat")
+                        .font(.title2)
+                    Text("Lettre")
+                        .font(.title3.weight(.semibold))
+                    Spacer()
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.2), lineWidth: 2)
+                        )
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(24)
     }
 }
 
 struct ShapeStepView: View {
     @Binding var selected: ShapeChoice?
     var onNext: () -> Void
+    var onBack: () -> Void
 
     var body: some View {
         VStack(spacing: 16) {
@@ -124,16 +263,92 @@ struct ShapeStepView: View {
                 .buttonStyle(.plain)
             }
 
-            Button("Suivant") {
-                onNext()
+            HStack(spacing: 12) {
+                Button("Retour") {
+                    onBack()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+
+                Button("Suivant") {
+                    onNext()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(selected == nil ? Color.gray.opacity(0.4) : Color.white)
+                .foregroundStyle(selected == nil ? Color.white.opacity(0.6) : Color.black)
+                .clipShape(Capsule())
+                .disabled(selected == nil)
             }
-            .font(.headline)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 12)
-            .background(selected == nil ? Color.gray.opacity(0.4) : Color.white)
-            .foregroundStyle(selected == nil ? Color.white.opacity(0.6) : Color.black)
-            .clipShape(Capsule())
-            .disabled(selected == nil)
+        }
+        .padding(24)
+    }
+}
+
+struct LetterStepView: View {
+    @Binding var selected: LetterChoice?
+    var onNext: () -> Void
+    var onBack: () -> Void
+
+    private let columns = [
+        GridItem(.adaptive(minimum: 54), spacing: 12)
+    ]
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Choisis une lettre")
+                .font(.largeTitle.bold())
+                .foregroundStyle(.white)
+
+            LazyVGrid(columns: columns, spacing: 12) {
+                ForEach(LetterChoice.allCases) { letter in
+                    Button {
+                        selected = letter
+                    } label: {
+                        Text(letter.rawValue)
+                            .font(.title3.weight(.semibold))
+                            .frame(width: 54, height: 54)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.white.opacity(0.1))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(selected == letter ? Color.green : Color.white.opacity(0.2), lineWidth: 2)
+                                    )
+                            )
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button("Retour") {
+                    onBack()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+
+                Button("Suivant") {
+                    onNext()
+                }
+                .font(.headline)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(selected == nil ? Color.gray.opacity(0.4) : Color.white)
+                .foregroundStyle(selected == nil ? Color.white.opacity(0.6) : Color.black)
+                .clipShape(Capsule())
+                .disabled(selected == nil)
+            }
         }
         .padding(24)
     }
@@ -231,7 +446,7 @@ struct ColorStepView: View {
 }
 
 struct PhotoStepView: View {
-    var shape: ShapeChoice?
+    var drawingChoice: DrawingChoice?
     var color: Color
     var onBack: () -> Void
     var onCaptured: (UIImage) -> Void
@@ -248,7 +463,7 @@ struct PhotoStepView: View {
     var body: some View {
         ZStack(alignment: .top) {
             LongExposureCameraView(
-                shape: shape,
+                drawingChoice: drawingChoice,
                 captureRequestID: captureRequestID,
                 onFinished: onCaptured
             )
@@ -271,11 +486,13 @@ struct PhotoStepView: View {
                     Spacer()
 
                     HStack(spacing: 8) {
-                        if let shape {
-                            Image(systemName: shape.systemImage)
-                            Text(shape.rawValue)
+                        if let drawingChoice {
+                            if let systemImage = drawingChoice.systemImage {
+                                Image(systemName: systemImage)
+                            }
+                            Text(drawingChoice.displayName)
                         } else {
-                            Text("Aucune forme")
+                            Text("Aucun choix")
                         }
                         Circle()
                             .fill(color)
@@ -347,9 +564,10 @@ struct PhotoStepView: View {
                     isDroneSequenceDone = false
                     return
                 }
+                guard let drawingChoice else { return }
                 isDroneRunning = true
                 canStartPictureWhileDroneRunning = false
-                DroneSequenceManager.shared.startSequence(shape: shape) {
+                DroneSequenceManager.shared.startSequence(drawingChoice: drawingChoice) {
                     isDroneRunning = false
                     isDroneSequenceDone = true
                     canStartPictureWhileDroneRunning = false
@@ -395,13 +613,6 @@ struct PhotoStepView: View {
         )
     }
 
-    private var buttonTitle: String {
-        if isDroneRunning {
-            return "Start picture"
-        }
-        return isDroneSequenceDone ? "Start picture" : "Start drone"
-    }
-
     private var primaryButtonTitle: String {
         if isDroneRunning {
             return "Commencer la captation"
@@ -413,7 +624,7 @@ struct PhotoStepView: View {
         if isDroneRunning {
             return canStartPictureWhileDroneRunning && !isCapturing
         }
-        return !isCapturing
+        return drawingChoice != nil && !isCapturing
     }
 
     private func showFlightToastMessage() {
@@ -464,19 +675,17 @@ struct PreviewStepView: View {
 }
 
 struct LongExposureCameraView: UIViewControllerRepresentable {
-    var shape: ShapeChoice?
+    var drawingChoice: DrawingChoice?
     var captureRequestID: UUID?
     var onFinished: (UIImage) -> Void = { _ in }
 
     func makeUIViewController(context: Context) -> LongExposureViewController {
         let controller = LongExposureViewController()
         controller.onFinishedCapture = onFinished
-        controller.selectedShape = shape
         return controller
     }
 
     func updateUIViewController(_ uiViewController: LongExposureViewController, context: Context) {
-        uiViewController.selectedShape = shape
         if let captureRequestID, captureRequestID != uiViewController.lastCaptureRequestID {
             uiViewController.lastCaptureRequestID = captureRequestID
             uiViewController.startCaptureExternally()

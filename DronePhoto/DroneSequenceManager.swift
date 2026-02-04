@@ -1,11 +1,6 @@
 import Foundation
 import Network
 
-struct DroneCommand {
-    let text: String
-    let waitAfter: TimeInterval
-}
-
 final class DroneSequenceManager {
     static let shared = DroneSequenceManager()
 
@@ -15,12 +10,11 @@ final class DroneSequenceManager {
 
     private let commandSpacing: TimeInterval = 1.2
 
-    func startSequence(shape: ShapeChoice?, completion: (() -> Void)? = nil) {
-        guard let shape else { return }
+    func startSequence(drawingChoice: DrawingChoice, completion: (() -> Void)? = nil) {
         queue.async {
             guard !self.isRunning else { return }
             self.isRunning = true
-            let commands = self.buildSequence(for: shape)
+            let commands = self.buildSequence(for: drawingChoice)
             self.run(commands, index: 0, completion: completion)
         }
     }
@@ -43,39 +37,14 @@ final class DroneSequenceManager {
         }
     }
 
-    private func buildSequence(for shape: ShapeChoice) -> [DroneCommand] {
+    private func buildSequence(for drawingChoice: DrawingChoice) -> [DroneCommand] {
         var commands: [DroneCommand] = [
             DroneCommand(text: "command", waitAfter: commandSpacing),
             DroneCommand(text: "speed 25", waitAfter: commandSpacing),
             DroneCommand(text: "takeoff", waitAfter: commandSpacing)
         ]
 
-        switch shape {
-        case .square:
-            commands.append(contentsOf: [
-                DroneCommand(text: "up 50", waitAfter: commandSpacing),
-                DroneCommand(text: "right 50", waitAfter: commandSpacing),
-                DroneCommand(text: "down 50", waitAfter: commandSpacing),
-                DroneCommand(text: "left 50", waitAfter: commandSpacing)
-            ])
-        case .rectangle:
-            commands.append(contentsOf: [
-                DroneCommand(text: "up 40", waitAfter: commandSpacing),
-                DroneCommand(text: "right 80", waitAfter: commandSpacing),
-                DroneCommand(text: "down 40", waitAfter: commandSpacing),
-                DroneCommand(text: "left 80", waitAfter: commandSpacing)
-            ])
-        case .triangle:
-            commands.append(contentsOf: [
-                DroneCommand(text: "forward 60", waitAfter: commandSpacing),
-                DroneCommand(text: "cw 120", waitAfter: commandSpacing),
-                DroneCommand(text: "forward 60", waitAfter: commandSpacing),
-                DroneCommand(text: "cw 120", waitAfter: commandSpacing),
-                DroneCommand(text: "forward 60", waitAfter: commandSpacing),
-                DroneCommand(text: "cw 120", waitAfter: commandSpacing)
-            ])
-        }
-
+        commands.append(contentsOf: DronePatternLibrary.commands(for: drawingChoice, spacing: commandSpacing))
         commands.append(DroneCommand(text: "land", waitAfter: commandSpacing))
         return commands
     }
