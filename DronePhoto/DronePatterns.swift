@@ -20,23 +20,22 @@ enum DronePatternLibrary {
         case .square:
             return [
                 DroneCommand(text: "up 50", waitAfter: spacing),
-                DroneCommand(text: "forward 50", waitAfter: spacing),
+                DroneCommand(text: "right 50", waitAfter: spacing),
                 DroneCommand(text: "down 50", waitAfter: spacing),
-                DroneCommand(text: "back 50", waitAfter: spacing)
+                DroneCommand(text: "left 50", waitAfter: spacing)
             ]
         case .rectangle:
             return [
                 DroneCommand(text: "up 80", waitAfter: spacing),
-                DroneCommand(text: "forward 40", waitAfter: spacing),
+                DroneCommand(text: "right 40", waitAfter: spacing),
                 DroneCommand(text: "down 80", waitAfter: spacing),
-                DroneCommand(text: "back 40", waitAfter: spacing)
+                DroneCommand(text: "left 40", waitAfter: spacing)
             ]
         case .triangle:
             return [
-                DroneCommand(text: "up 60", waitAfter: spacing),
-                DroneCommand(text: "forward 60", waitAfter: spacing),
-                DroneCommand(text: "down 60", waitAfter: spacing),
-                DroneCommand(text: "back 60", waitAfter: spacing)
+                DroneCommand(text: "go 30 60 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 30 -60 0 25", waitAfter: spacing),
+                DroneCommand(text: "left 60", waitAfter: spacing)
             ]
         }
     }
@@ -69,8 +68,8 @@ enum DronePatternLibrary {
         case .D:
             return [
                 DroneCommand(text: "up 100", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -50 25", waitAfter: spacing),
-                DroneCommand(text: "go -50 0 -50 25", waitAfter: spacing)
+                DroneCommand(text: "go 50 -50 0 25", waitAfter: spacing),
+                DroneCommand(text: "go -50 -50 0 25", waitAfter: spacing)
             ]
         case .E:
             return [
@@ -119,9 +118,9 @@ enum DronePatternLibrary {
             return [
                 DroneCommand(text: "up 100", waitAfter: spacing),
                 DroneCommand(text: "down 50", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 50 25", waitAfter: spacing),
-                DroneCommand(text: "go -50 0 -50 25", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -50 25", waitAfter: spacing)
+                DroneCommand(text: "go 50 50 0 25", waitAfter: spacing),
+                DroneCommand(text: "go -50 -50 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 50 -50 0 25", waitAfter: spacing)
             ]
         case .L:
             return [
@@ -140,7 +139,7 @@ enum DronePatternLibrary {
         case .N:
             return [
                 DroneCommand(text: "up 100", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -100 25", waitAfter: spacing),
+                DroneCommand(text: "go 50 -100 0 25", waitAfter: spacing),
                 DroneCommand(text: "up 100", waitAfter: spacing)
             ]
         case .O:
@@ -163,8 +162,8 @@ enum DronePatternLibrary {
                 DroneCommand(text: "up 100", waitAfter: spacing),
                 DroneCommand(text: "right 50", waitAfter: spacing),
                 DroneCommand(text: "down 100", waitAfter: spacing),
-                DroneCommand(text: "go -25 0 25 25", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -50 25", waitAfter: spacing)
+                DroneCommand(text: "go -25 25 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 50 -50 0 25", waitAfter: spacing)
             ]
         case .R:
             return [
@@ -172,7 +171,7 @@ enum DronePatternLibrary {
                 DroneCommand(text: "right 50", waitAfter: spacing),
                 DroneCommand(text: "down 50", waitAfter: spacing),
                 DroneCommand(text: "left 50", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -50 25", waitAfter: spacing)
+                DroneCommand(text: "go 50 -50 0 25", waitAfter: spacing)
             ]
         case .S:
             return [
@@ -197,9 +196,9 @@ enum DronePatternLibrary {
             ]
         case .V:
             return [
-                DroneCommand(text: "go -25 0 100 25", waitAfter: spacing),
-                DroneCommand(text: "go 25 0 -100 25", waitAfter: spacing),
-                DroneCommand(text: "go 25 0 100 25", waitAfter: spacing)
+                DroneCommand(text: "go -25 100 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 25 -100 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 25 100 0 25", waitAfter: spacing)
             ]
         case .W:
             return [
@@ -213,10 +212,10 @@ enum DronePatternLibrary {
             ]
         case .X:
             return [
-                DroneCommand(text: "go 50 0 100 25", waitAfter: spacing),
-                DroneCommand(text: "go -25 0 -50 25", waitAfter: spacing),
-                DroneCommand(text: "go -25 0 50 25", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 -100 25", waitAfter: spacing)
+                DroneCommand(text: "go 50 100 0 25", waitAfter: spacing),
+                DroneCommand(text: "go -25 -50 0 25", waitAfter: spacing),
+                DroneCommand(text: "go -25 50 0 25", waitAfter: spacing),
+                DroneCommand(text: "go 50 -100 0 25", waitAfter: spacing)
             ]
         case .Y:
             return [
@@ -230,7 +229,7 @@ enum DronePatternLibrary {
         case .Z:
             return [
                 DroneCommand(text: "left 50", waitAfter: spacing),
-                DroneCommand(text: "go 50 0 100 25", waitAfter: spacing),
+                DroneCommand(text: "go 50 100 0 25", waitAfter: spacing),
                 DroneCommand(text: "left 50", waitAfter: spacing)
             ]
         }

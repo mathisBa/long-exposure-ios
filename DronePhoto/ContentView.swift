@@ -477,6 +477,9 @@ struct PhotoStepView: View {
     @State private var canStartPictureWhileDroneRunning = false
     @State private var showFlightToast = false
     @State private var toastWorkItem: DispatchWorkItem?
+    @State private var showDroneErrorToast = false
+    @State private var droneErrorMessage = ""
+    @State private var errorWorkItem: DispatchWorkItem?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -565,46 +568,75 @@ struct PhotoStepView: View {
                     .transition(.opacity)
                     .padding(.top, 64)
             }
+            if showDroneErrorToast {
+                Text(droneErrorMessage)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(Color.red.opacity(0.75))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .transition(.opacity)
+                    .padding(.top, 104)
+            }
         }
         .safeAreaInset(edge: .bottom) {
-            Button(primaryButtonTitle) {
+            VStack(spacing: 10) {
                 if isDroneRunning {
-                    guard canStartPictureWhileDroneRunning else { return }
-                    guard !isCapturing else { return }
-                    isCapturing = true
-                    captureRequestID = UUID()
-                    return
+                    Button("Stop drone") {
+                        DroneSequenceManager.shared.emergencyLand()
+                        showDroneError("Drone: atterrissage d'urgence")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.red)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
                 }
-                guard !isDroneSequenceDone else {
-                    guard !isCapturing else { return }
-                    isCapturing = true
-                    captureRequestID = UUID()
-                    isDroneSequenceDone = false
-                    return
-                }
-                guard let drawingChoice else { return }
-                isDroneRunning = true
-                canStartPictureWhileDroneRunning = false
-                DroneSequenceManager.shared.startSequence(drawingChoice: drawingChoice) {
-                    isDroneRunning = false
-                    isDroneSequenceDone = true
-                    canStartPictureWhileDroneRunning = false
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+
+                Button(primaryButtonTitle) {
                     if isDroneRunning {
-                        canStartPictureWhileDroneRunning = true
+                        guard canStartPictureWhileDroneRunning else { return }
+                        guard !isCapturing else { return }
+                        isCapturing = true
+                        captureRequestID = UUID()
+                        return
+                    }
+                    guard !isDroneSequenceDone else {
+                        guard !isCapturing else { return }
+                        isCapturing = true
+                        captureRequestID = UUID()
+                        isDroneSequenceDone = false
+                        return
+                    }
+                    guard let drawingChoice else { return }
+                    isDroneRunning = true
+                    canStartPictureWhileDroneRunning = false
+                    DroneSequenceManager.shared.startSequence(drawingChoice: drawingChoice, onError: { message in
+                        showDroneError(message)
+                    }) {
+                        isDroneRunning = false
+                        isDroneSequenceDone = true
+                        canStartPictureWhileDroneRunning = false
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        if isDroneRunning {
+                            canStartPictureWhileDroneRunning = true
+                        }
                     }
                 }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.blue.opacity(primaryButtonEnabled ? 1.0 : 0.6))
+                .foregroundStyle(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .disabled(!primaryButtonEnabled)
             }
-            .font(.headline)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.blue.opacity(primaryButtonEnabled ? 1.0 : 0.6))
-            .foregroundStyle(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .disabled(!primaryButtonEnabled)
         }
         .onChange(of: captureRequestID) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -657,6 +689,21 @@ struct PhotoStepView: View {
         }
         toastWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
+    }
+
+    private func showDroneError(_ message: String) {
+        errorWorkItem?.cancel()
+        droneErrorMessage = message
+        withAnimation(.easeIn(duration: 0.15)) {
+            showDroneErrorToast = true
+        }
+        let workItem = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showDroneErrorToast = false
+            }
+        }
+        errorWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: workItem)
     }
 }
 
