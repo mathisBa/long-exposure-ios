@@ -874,10 +874,23 @@ struct PhotoStepView: View {
         }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
+                if isCapturing {
+                    Button("Arrêter la capture") {
+                        stopCapture()
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.red.opacity(0.9))
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .padding(.horizontal, 16)
+                }
                 if isDroneRunning {
                     Button("Stop drone") {
                         DroneSequenceManager.shared.emergencyLand()
                         showDroneError("Drone: atterrissage d'urgence")
+                        stopCapture()
                     }
                     .font(.headline)
                     .frame(maxWidth: .infinity)
@@ -898,7 +911,7 @@ struct PhotoStepView: View {
                             captureRequestID = UUID()
                         },
                         onPatternEnd: {
-                            stopCaptureRequestID = UUID()
+                            stopCapture()
                         },
                         onError: { message in
                         showDroneError(message)
@@ -915,11 +928,6 @@ struct PhotoStepView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
                 .disabled(!primaryButtonEnabled)
-            }
-        }
-        .onChange(of: captureRequestID) { _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isCapturing = false
             }
         }
         .contentShape(Rectangle())
@@ -984,6 +992,12 @@ struct PhotoStepView: View {
         }
         errorWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: workItem)
+    }
+
+    private func stopCapture() {
+        guard isCapturing else { return }
+        stopCaptureRequestID = UUID()
+        isCapturing = false
     }
 }
 
