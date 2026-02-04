@@ -53,16 +53,16 @@ enum DrawingChoice {
 }
 
 enum FlowStep {
+    case color
     case mode
     case shape
     case letter
-    case color
     case photo
     case preview
 }
 
 struct ContentView: View {
-    @State private var step: FlowStep = .mode
+    @State private var step: FlowStep = .color
     @State private var selectedMode: DrawMode?
     @State private var selectedShape: ShapeChoice?
     @State private var selectedLetter: LetterChoice?
@@ -71,16 +71,25 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
+            selectedColor
+                .ignoresSafeArea()
             LinearGradient(
-                colors: [Color.black, Color.gray.opacity(0.2)],
+                colors: [Color.black.opacity(0.45), Color.black.opacity(0.15)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
             switch step {
+            case .color:
+                ColorStepView(selectedColor: $selectedColor, onNext: {
+                    step = .mode
+                }, onBack: nil)
+                .transition(.opacity)
             case .mode:
-                ModeStepView(selectedMode: $selectedMode) { mode in
+                ModeStepView(selectedMode: $selectedMode, onBack: {
+                    step = .color
+                }) { mode in
                     switch mode {
                     case .shape:
                         step = .shape
@@ -91,37 +100,32 @@ struct ContentView: View {
                 .transition(.opacity)
             case .shape:
                 ShapeStepView(selected: $selectedShape) {
-                    step = .color
+                    step = .photo
                 } onBack: {
                     step = .mode
                 }
                 .transition(.opacity)
             case .letter:
                 LetterStepView(selected: $selectedLetter) {
-                    step = .color
-                } onBack: {
-                    step = .mode
-                }
-                .transition(.opacity)
-            case .color:
-                ColorStepView(selectedColor: $selectedColor) {
                     step = .photo
                 } onBack: {
-                    switch selectedMode {
-                    case .shape:
-                        step = .shape
-                    case .letter:
-                        step = .letter
-                    case .none:
-                        step = .mode
-                    }
+                    step = .mode
                 }
                 .transition(.opacity)
             case .photo:
                 PhotoStepView(
                     drawingChoice: currentDrawingChoice,
                     color: selectedColor,
-                    onBack: { step = .color },
+                    onBack: {
+                        switch selectedMode {
+                        case .shape:
+                            step = .shape
+                        case .letter:
+                            step = .letter
+                        case .none:
+                            step = .mode
+                        }
+                    },
                     onCaptured: { image in
                         previewImage = image
                         step = .preview
@@ -144,7 +148,7 @@ struct ContentView: View {
         selectedShape = nil
         selectedLetter = nil
         selectedColor = .blue
-        step = .mode
+        step = .color
     }
 
     private var currentDrawingChoice: DrawingChoice? {
@@ -166,6 +170,7 @@ struct ContentView: View {
 
 struct ModeStepView: View {
     @Binding var selectedMode: DrawMode?
+    var onBack: () -> Void
     var onNext: (DrawMode) -> Void
 
     var body: some View {
@@ -219,6 +224,16 @@ struct ModeStepView: View {
                 )
             }
             .buttonStyle(.plain)
+
+            Button("Retour") {
+                onBack()
+            }
+            .font(.headline)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
+            .background(Color.white.opacity(0.15))
+            .foregroundStyle(.white)
+            .clipShape(Capsule())
         }
         .padding(24)
     }
@@ -357,7 +372,7 @@ struct LetterStepView: View {
 struct ColorStepView: View {
     @Binding var selectedColor: Color
     var onNext: () -> Void
-    var onBack: () -> Void
+    var onBack: (() -> Void)?
     @State private var dragOffset: CGFloat = 0
 
     private let swatches: [Color] = [
@@ -406,15 +421,17 @@ struct ColorStepView: View {
             }
 
             HStack(spacing: 12) {
-                Button("Retour") {
-                    onBack()
+                if let onBack {
+                    Button("Retour") {
+                        onBack()
+                    }
+                    .font(.headline)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(0.15))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
                 }
-                .font(.headline)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.15))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
 
                 Button("Suivant") {
                     onNext()
@@ -435,6 +452,7 @@ struct ColorStepView: View {
                     dragOffset = value.translation.width
                 }
                 .onEnded { value in
+                    guard let onBack else { return }
                     let shouldGoBack = value.translation.width > 90 && abs(value.translation.height) < 60
                     dragOffset = 0
                     if shouldGoBack {
