@@ -3,6 +3,7 @@ import AVFoundation
 import Photos
 
 final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDelegate {
+    var onFinishedCapture: ((UIImage) -> Void)?
 
     // MARK: - Camera
     private let session = AVCaptureSession()
@@ -392,6 +393,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         resultImageView.image = result
         resultImageView.isHidden = false
         previewLayer?.isHidden = true
+        onFinishedCapture?(result)
 
         PHPhotoLibrary.requestAuthorization { status in
             guard status == .authorized || status == .limited else {
@@ -468,5 +470,6 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             showToast("Impossible d'augmenter le framerate.")
         }
     }
+
 }
  
