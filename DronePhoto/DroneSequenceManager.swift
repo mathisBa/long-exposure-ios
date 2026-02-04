@@ -14,6 +14,10 @@ final class DroneSequenceManager {
     private var completion: (() -> Void)?
     private var consecutiveTimeouts = 0
     private var onError: ((String) -> Void)?
+    private var onPatternStart: (() -> Void)?
+    private var onPatternEnd: (() -> Void)?
+    private var patternStartIndex = 0
+    private var patternEndIndex = 0
 
     private let commandSpacing: TimeInterval = 0.0
     private let responseTimeout: TimeInterval = 6.0
@@ -21,6 +25,8 @@ final class DroneSequenceManager {
 
     func startSequence(
         drawingChoice: DrawingChoice,
+        onPatternStart: (() -> Void)? = nil,
+        onPatternEnd: (() -> Void)? = nil,
         onError: ((String) -> Void)? = nil,
         completion: (() -> Void)? = nil
     ) {
@@ -29,11 +35,15 @@ final class DroneSequenceManager {
             self.isRunning = true
             self.completion = completion
             self.onError = onError
+            self.onPatternStart = onPatternStart
+            self.onPatternEnd = onPatternEnd
             self.consecutiveTimeouts = 0
             let commands = self.buildSequence(for: drawingChoice)
             self.currentCommands = commands
             self.currentIndex = 0
             self.waitingForResponse = false
+            self.patternStartIndex = 3
+            self.patternEndIndex = max(3, commands.count - 2)
             self.sender.onMessage = { [weak self] message in
                 self?.handleMessage(message)
             }
@@ -56,6 +66,11 @@ final class DroneSequenceManager {
         }
 
         let command = currentCommands[currentIndex]
+        if currentIndex == patternStartIndex {
+            DispatchQueue.main.async { [weak self] in
+                self?.onPatternStart?()
+            }
+        }
         waitingForResponse = true
         sender.send(command.text)
 
@@ -95,6 +110,11 @@ final class DroneSequenceManager {
                 self.pendingTimeout?.cancel()
                 self.consecutiveTimeouts = 0
                 let delay = self.currentCommands[self.currentIndex].waitAfter
+                if self.currentIndex == self.patternEndIndex {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onPatternEnd?()
+                    }
+                }
                 self.currentIndex += 1
                 if delay > 0 {
                     self.queue.asyncAfter(deadline: .now() + delay) {
@@ -125,9 +145,17 @@ final class DroneSequenceManager {
         isRunning = false
         let errorHandler = onError
         onError = nil
+        let patternEndHandler = onPatternEnd
+        onPatternEnd = nil
+        onPatternStart = nil
         if let completion {
             DispatchQueue.main.async {
                 completion()
+            }
+        }
+        if let patternEndHandler {
+            DispatchQueue.main.async {
+                patternEndHandler()
             }
         }
         if let error, let errorHandler {

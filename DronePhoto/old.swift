@@ -6,6 +6,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     var onFinishedCapture: ((UIImage) -> Void)?
     var selectedShape: ShapeChoice?
     var lastCaptureRequestID: UUID?
+    var lastStopCaptureRequestID: UUID?
 
     // MARK: - Camera
     private let session = AVCaptureSession()
@@ -31,9 +32,9 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
 
     // MARK: - Simple UI
     private let previewView = UIView()
-    private let button = UIButton(type: .system)
     private let timerLabel = UILabel()
     private let resultImageView = UIImageView()
+    private let recordingLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -44,13 +45,13 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
 
     private func setupMinimalUI() {
         previewView.translatesAutoresizingMaskIntoConstraints = false
-        button.translatesAutoresizingMaskIntoConstraints = false
         timerLabel.translatesAutoresizingMaskIntoConstraints = false
         resultImageView.translatesAutoresizingMaskIntoConstraints = false
+        recordingLabel.translatesAutoresizingMaskIntoConstraints = false
 
         view.addSubview(previewView)
-        view.addSubview(button)
         view.addSubview(timerLabel)
+        view.addSubview(recordingLabel)
         previewView.addSubview(resultImageView)
 
         NSLayoutConstraint.activate([
@@ -59,13 +60,11 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             previewView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             previewView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            button.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            button.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            button.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-            button.heightAnchor.constraint(equalToConstant: 50),
-
             timerLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             timerLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+
+            recordingLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            recordingLabel.centerYAnchor.constraint(equalTo: timerLabel.centerYAnchor),
 
             resultImageView.topAnchor.constraint(equalTo: previewView.topAnchor),
             resultImageView.leadingAnchor.constraint(equalTo: previewView.leadingAnchor),
@@ -73,16 +72,15 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
             resultImageView.bottomAnchor.constraint(equalTo: previewView.bottomAnchor)
         ])
 
-        button.setTitle("Prendre une photo", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = UIColor.systemBlue
-        button.layer.cornerRadius = 8
-        button.addTarget(self, action: #selector(startCaptureTapped), for: .touchUpInside)
-
         timerLabel.textColor = .white
         timerLabel.font = .boldSystemFont(ofSize: 24)
         timerLabel.textAlignment = .center
         timerLabel.text = ""
+
+        recordingLabel.text = "● REC"
+        recordingLabel.textColor = .systemRed
+        recordingLabel.font = .boldSystemFont(ofSize: 16)
+        recordingLabel.isHidden = true
 
         resultImageView.contentMode = .scaleAspectFill
         resultImageView.clipsToBounds = true
@@ -161,7 +159,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
     }
 
     // MARK: - Capture
-    @objc private func startCaptureTapped() {
+    private func startCaptureTapped() {
         var shouldStart = false
         queue.sync {
             if !isCapturing {
@@ -177,41 +175,66 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         }
         guard shouldStart else { return }
         logEvent("LongExposure: start capture")
-        startCapture()
+        startCapture(useTimer: true)
     }
 
     func startCaptureExternally() {
-        startCaptureTapped()
+        var shouldStart = false
+        queue.sync {
+            if !isCapturing {
+                isCapturing = true
+                accumulatorBuffer = nil
+                referenceBuffer = nil
+                lastFrameBuffer = nil
+                accumulatorWidth = 0
+                accumulatorHeight = 0
+                frameCount = 0
+                shouldStart = true
+            }
+        }
+        guard shouldStart else { return }
+        logEvent("LongExposure: start capture (external)")
+        startCapture(useTimer: false)
     }
 
-    private func startCapture() {
+    private func startCapture(useTimer: Bool) {
         resultImageView.image = nil
         resultImageView.isHidden = true
         previewLayer?.isHidden = false
         captureOrientation = UIDevice.current.orientation
-        captureEndTime = Date().addingTimeInterval(totalDuration)
-
-        button.isEnabled = false
-        button.alpha = 0.5
+        captureEndTime = useTimer ? Date().addingTimeInterval(totalDuration) : nil
 
         countdownTimer?.invalidate()
-        var remaining = Int(totalDuration)
-        timerLabel.text = "\(remaining) s"
-        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            guard let self else { return }
-            remaining -= 1
-            self.timerLabel.text = remaining > 0 ? "\(remaining) s" : ""
-            if remaining <= 0 {
-                timer.invalidate()
+        if useTimer {
+            var remaining = Int(totalDuration)
+            timerLabel.text = "\(remaining) s"
+            let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+                guard let self else { return }
+                remaining -= 1
+                self.timerLabel.text = remaining > 0 ? "\(remaining) s" : ""
+                if remaining <= 0 {
+                    timer.invalidate()
+                }
             }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        countdownTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+            countdownTimer = timer
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) { [weak self] in
-            self?.logEvent("LongExposure: end capture timer")
-            self?.finishCapture()
+            DispatchQueue.main.asyncAfter(deadline: .now() + totalDuration) { [weak self] in
+                self?.logEvent("LongExposure: end capture timer")
+                self?.finishCapture()
+            }
+        } else {
+            timerLabel.text = ""
+            startRecordingBlink()
         }
+    }
+
+    func stopCaptureExternally() {
+        queue.sync {
+            guard isCapturing else { return }
+        }
+        logEvent("LongExposure: stop capture (external)")
+        finishCapture()
     }
 
     private func finishCapture() {
@@ -235,9 +258,7 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
         countdownTimer?.invalidate()
         countdownTimer = nil
         timerLabel.text = ""
-        button.isEnabled = true
-        button.alpha = 1.0
-
+        stopRecordingBlink()
         queue.async { [weak self] in
             guard let self else { return }
             let image = self.buildImage(buffer: bufferCopy, width: width, height: height)
@@ -248,6 +269,20 @@ final class LongExposureViewController: UIViewController, AVCaptureVideoDataOutp
                 self.handleFinishedImages(result: image, reference: referenceImage, lastFrame: lastFrameImage)
             }
         }
+    }
+
+    private func startRecordingBlink() {
+        recordingLabel.isHidden = false
+        recordingLabel.alpha = 1.0
+        UIView.animate(withDuration: 0.6, delay: 0, options: [.autoreverse, .repeat, .allowUserInteraction]) {
+            self.recordingLabel.alpha = 0.2
+        }
+    }
+
+    private func stopRecordingBlink() {
+        recordingLabel.layer.removeAllAnimations()
+        recordingLabel.alpha = 1.0
+        recordingLabel.isHidden = true
     }
 
     func captureOutput(_ output: AVCaptureOutput,

@@ -761,12 +761,11 @@ struct PhotoStepView: View {
     var onBack: () -> Void
     var onCaptured: (UIImage) -> Void
     @State private var dragOffset: CGFloat = 0
-    @State private var isDroneSequenceDone = false
     @State private var isDroneRunning = false
     @State private var captureRequestID: UUID?
+    @State private var stopCaptureRequestID: UUID?
     @State private var isCapturing = false
     @State private var pulse = false
-    @State private var canStartPictureWhileDroneRunning = false
     @State private var showFlightToast = false
     @State private var toastWorkItem: DispatchWorkItem?
     @State private var showDroneErrorToast = false
@@ -778,6 +777,7 @@ struct PhotoStepView: View {
             LongExposureCameraView(
                 drawingChoice: drawingChoice,
                 captureRequestID: captureRequestID,
+                stopCaptureRequestID: stopCaptureRequestID,
                 onFinished: onCaptured
             )
                 .ignoresSafeArea()
@@ -889,34 +889,21 @@ struct PhotoStepView: View {
                 }
 
                 Button(primaryButtonTitle) {
-                    if isDroneRunning {
-                        guard canStartPictureWhileDroneRunning else { return }
-                        guard !isCapturing else { return }
-                        isCapturing = true
-                        captureRequestID = UUID()
-                        return
-                    }
-                    guard !isDroneSequenceDone else {
-                        guard !isCapturing else { return }
-                        isCapturing = true
-                        captureRequestID = UUID()
-                        isDroneSequenceDone = false
-                        return
-                    }
                     guard let drawingChoice else { return }
                     isDroneRunning = true
-                    canStartPictureWhileDroneRunning = false
-                    DroneSequenceManager.shared.startSequence(drawingChoice: drawingChoice, onError: { message in
+                    DroneSequenceManager.shared.startSequence(
+                        drawingChoice: drawingChoice,
+                        onPatternStart: {
+                            isCapturing = true
+                            captureRequestID = UUID()
+                        },
+                        onPatternEnd: {
+                            stopCaptureRequestID = UUID()
+                        },
+                        onError: { message in
                         showDroneError(message)
                     }) {
                         isDroneRunning = false
-                        isDroneSequenceDone = true
-                        canStartPictureWhileDroneRunning = false
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        if isDroneRunning {
-                            canStartPictureWhileDroneRunning = true
-                        }
                     }
                 }
                 .font(.headline)
@@ -957,19 +944,17 @@ struct PhotoStepView: View {
 
     private var primaryButtonTitle: String {
         if isDroneRunning {
-            return "Commencer la captation"
+            return "Captation en cours"
         }
-        return isDroneSequenceDone ? "Commencer la captation" : "Démarrer le drone"
+        return "Démarrer le drone"
     }
 
     private var primaryButtonEnabled: Bool {
-        if isDroneRunning {
-            return canStartPictureWhileDroneRunning && !isCapturing
-        }
+        if isDroneRunning { return false }
         if case .custom(let path) = drawingChoice {
-            return path.points.count >= 2 && !isCapturing
+            return path.points.count >= 2
         }
-        return drawingChoice != nil && !isCapturing
+        return drawingChoice != nil
     }
 
     private func showFlightToastMessage() {
@@ -1037,6 +1022,7 @@ struct PreviewStepView: View {
 struct LongExposureCameraView: UIViewControllerRepresentable {
     var drawingChoice: DrawingChoice?
     var captureRequestID: UUID?
+    var stopCaptureRequestID: UUID?
     var onFinished: (UIImage) -> Void = { _ in }
 
     func makeUIViewController(context: Context) -> LongExposureViewController {
@@ -1049,6 +1035,10 @@ struct LongExposureCameraView: UIViewControllerRepresentable {
         if let captureRequestID, captureRequestID != uiViewController.lastCaptureRequestID {
             uiViewController.lastCaptureRequestID = captureRequestID
             uiViewController.startCaptureExternally()
+        }
+        if let stopCaptureRequestID, stopCaptureRequestID != uiViewController.lastStopCaptureRequestID {
+            uiViewController.lastStopCaptureRequestID = stopCaptureRequestID
+            uiViewController.stopCaptureExternally()
         }
     }
 }
